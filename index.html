@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teleprompter de Músicas</title>
+  <meta name="theme-color" content="#121212">
+  <link rel="manifest" id="manifest-placeholder">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body { background-color: #121212; color: #ffffff; min-height: 100vh; display: flex; flex-direction: column; }
+    header { background-color: #1e1e1e; padding: 16px; text-align: center; font-size: 1.2rem; font-weight: bold; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+    .container { padding: 16px; flex: 1; display: flex; flex-direction: column; }
+    .hidden { display: none !important; }
+    
+    /* Botões e Formulários */
+    .btn { background-color: #bb86fc; color: #000; border: none; padding: 12px 20px; font-weight: bold; border-radius: 8px; cursor: pointer; font-size: 1rem; }
+    .btn-secondary { background-color: #333; color: #fff; }
+    .btn-danger { background-color: #cf6679; color: #000; }
+    .btn-success { background-color: #03dac6; color: #000; }
+    .btn-icon { background: none; border: none; color: #fff; font-size: 1.5rem; cursor: pointer; }
+    
+    input, textarea { width: 100%; padding: 12px; background-color: #1e1e1e; border: 1px solid #333; border-radius: 8px; color: #fff; font-size: 1rem; margin-bottom: 16px; }
+    textarea { height: 260px; resize: vertical; }
+
+    /* Lista de Músicas */
+    .song-card { background-color: #1e1e1e; border: 1px solid #2d2d2d; padding: 16px; border-radius: 12px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+    .song-card:active { background-color: #2a2a2a; }
+    .song-info { display: flex; align-items: center; gap: 12px; }
+    .song-number { background-color: #bb86fc; color: #000; font-weight: bold; padding: 4px 10px; border-radius: 20px; font-size: 0.9rem; }
+    .song-title { font-size: 1.1rem; font-weight: 600; }
+
+    /* Teleprompter */
+    #prompter-wrapper { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; display: flex; flex-direction: column; z-index: 100; }
+    #prompter-header { background-color: rgba(30, 30, 30, 0.95); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; }
+    #prompter-content { flex: 1; overflow-y: auto; padding: 40px 24px; color: #ffeb3b; font-weight: bold; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+    
+    .controls-panel { background-color: #1e1e1e; padding: 16px; border-top: 1px solid #333; display: flex; flex-direction: column; gap: 12px; }
+    .controls-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .slider-group { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+    .slider-group label { font-size: 0.8rem; color: #aaa; }
+    input[type="range"] { accent-color: #bb86fc; margin: 0; }
+  </style>
+</head>
+<body>
+
+  <!-- TELA 1: LISTA DE MÚSICAS -->
+  <div id="view-list" class="container">
+    <header style="margin: -16px -16px 16px -16px;">
+      <span>Zayn - Konnakol Tour</span>
+      <button class="btn" onclick="showView('view-add')">+ Nova</button>
+    </header>
+    <div id="songs-container"></div>
+  </div>
+
+  <!-- TELA 2: ADICIONAR MÚSICA -->
+  <div id="view-add" class="container hidden">
+    <header style="margin: -16px -16px 16px -16px;">
+      <button class="btn-icon" onclick="showView('view-list')">←</button>
+      <span>Cadastrar Música</span>
+      <div style="width: 24px;"></div>
+    </header>
+    <form id="form-add" onsubmit="handleAddSong(event)">
+      <label style="display:block; margin-bottom:8px; color:#aaa;">Título da Música</label>
+      <input type="text" id="input-title" placeholder="Ex: Faroeste Caboclo" required>
+      
+      <label style="display:block; margin-bottom:8px; color:#aaa;">Letra da Música</label>
+      <textarea id="input-lyrics" placeholder="Cole a letra aqui..." required></textarea>
+      
+      <button type="submit" class="btn" style="width:100%;">Salvar Música</button>
+    </form>
+  </div>
+
+  <!-- TELA 3: TELEPROMPTER -->
+  <div id="view-prompter" class="hidden">
+    <div id="prompter-wrapper">
+      <div id="prompter-header">
+        <button class="btn-icon" onclick="closePrompter()">← Sair</button>
+        <span id="prompter-title" style="font-weight:bold; font-size:1.1rem; color:#fff;"></span>
+        <div style="width: 40px;"></div>
+      </div>
+      <div id="prompter-content"></div>
+      
+      <div class="controls-panel">
+        <div class="controls-row">
+          <button id="btn-toggle" class="btn btn-success" style="flex:1;" onclick="toggleScroll()">INICIAR</button>
+          <button class="btn btn-secondary" onclick="resetScroll()">REINICIAR</button>
+        </div>
+        <div class="controls-row">
+          <div class="slider-group">
+            <label>Velocidade: <span id="val-speed">2</span></label>
+            <input type="range" id="slider-speed" min="0.5" max="8" step="0.5" value="2" oninput="updateSpeed(this.value)">
+          </div>
+          <div class="slider-group">
+            <label>Fonte: <span id="val-font">28</span>px</label>
+            <input type="range" id="slider-font" min="18" max="50" step="2" value="28" oninput="updateFont(this.value)">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Gerenciamento de Músicas no Armazenamento do Dispositivo (localStorage)
+    function getSongs() {
+      const data = localStorage.getItem('teleprompter_songs');
+      return data ? JSON.parse(data) : [];
+    }
+
+    function saveSongs(songs) {
+      localStorage.setItem('teleprompter_songs', JSON.stringify(songs));
+    }
+
+    function showView(viewId) {
+      document.getElementById('view-list').classList.add('hidden');
+      document.getElementById('view-add').classList.add('hidden');
+      document.getElementById('view-prompter').classList.add('hidden');
+      
+      document.getElementById(viewId).classList.remove('hidden');
+      if (viewId === 'view-list') renderSongs();
+    }
+
+    // Renderiza mantendo estritamente a Ordem de Inserção
+    function renderSongs() {
+      const songs = getSongs();
+      const container = document.getElementById('songs-container');
+      container.innerHTML = '';
+
+      if (songs.length === 0) {
+        container.innerHTML = `<p style="text-align:center; color:#777; margin-top:40px;">Nenhuma música cadastrada.<br>Clique em "+ Nova" para adicionar.</p>`;
+        return;
+      }
+
+      songs.forEach((song, index) => {
+        const card = document.createElement('div');
+        card.className = 'song-card';
+        card.innerHTML = `
+          <div class="song-info">
+            <span class="song-number">#${index + 1}</span>
+            <span class="song-title">${escapeHtml(song.title)}</span>
+          </div>
+          <button class="btn-icon" style="color:#cf6679; font-size:1.2rem;" onclick="deleteSong(event, ${song.id})">🗑️</button>
+        `;
+        card.onclick = (e) => {
+          if (!e.target.closest('button')) openPrompter(song);
+        };
+        container.appendChild(card);
+      });
+    }
+
+    function handleAddSong(e) {
+      e.preventDefault();
+      const title = document.getElementById('input-title').value.trim();
+      const lyrics = document.getElementById('input-lyrics').value.trim();
+      if (!title || !lyrics) return;
+
+      const songs = getSongs();
+      songs.push({ id: Date.now(), title, lyrics }); // Adiciona sempre ao final (Ordem de inserção)
+      saveSongs(songs);
+
+      document.getElementById('form-add').reset();
+      showView('view-list');
+    }
+
+    function deleteSong(e, id) {
+      e.stopPropagation();
+      if (confirm('Excluir esta música?')) {
+        const songs = getSongs().filter(s => s.id !== id);
+        saveSongs(songs);
+        renderSongs();
+      }
+    }
+
+    // Lógica da Rolagem Automática do Teleprompter
+    let isScrolling = false;
+    let scrollSpeed = 2;
+    let scrollAnimFrame = null;
+
+    function openPrompter(song) {
+      document.getElementById('prompter-title').textContent = song.title;
+      document.getElementById('prompter-content').textContent = song.lyrics;
+      showView('view-prompter');
+      resetScroll();
+    }
+
+    function closePrompter() {
+      stopScroll();
+      showView('view-list');
+    }
+
+    function toggleScroll() {
+      isScrolling = !isScrolling;
+      const btn = document.getElementById('btn-toggle');
+      if (isScrolling) {
+        btn.textContent = 'PAUSAR';
+        btn.className = 'btn btn-danger';
+        scrollStep();
+      } else {
+        btn.textContent = 'INICIAR';
+        btn.className = 'btn btn-success';
+        stopScroll();
+      }
+    }
+
+    function scrollStep() {
+      if (!isScrolling) return;
+      const container = document.getElementById('prompter-content');
+      container.scrollTop += parseFloat(scrollSpeed) * 0.5;
+      
+      if (container.scrollTop + container.clientHeight >= container.scrollHeight - 2) {
+        toggleScroll();
+        return;
+      }
+      scrollAnimFrame = requestAnimationFrame(scrollStep);
+    }
+
+    function stopScroll() {
+      if (scrollAnimFrame) cancelAnimationFrame(scrollAnimFrame);
+    }
+
+    function resetScroll() {
+      stopScroll();
+      isScrolling = false;
+      const btn = document.getElementById('btn-toggle');
+      btn.textContent = 'INICIAR';
+      btn.className = 'btn btn-success';
+      document.getElementById('prompter-content').scrollTop = 0;
+    }
+
+    function updateSpeed(val) {
+      scrollSpeed = val;
+      document.getElementById('val-speed').textContent = val;
+    }
+
+    function updateFont(val) {
+      document.getElementById('prompter-content').style.fontSize = val + 'px';
+      document.getElementById('val-font').textContent = val;
+    }
+
+    function escapeHtml(text) {
+      return text.replace(/[&<>"']/g, function(m) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+      });
+    }
+
+    // PWA Manifest em tempo de execução
+    const manifest = {
+      name: "Teleprompter de Músicas",
+      short_name: "Teleprompter",
+      start_url: "./",
+      display: "standalone",
+      background_color: "#121212",
+      theme_color: "#121212",
+      icons: [{ src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>", sizes: "192x192", type: "image/svg+xml" }]
+    };
+    const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+    document.getElementById('manifest-placeholder').setAttribute('href', URL.createObjectURL(blob));
+
+    renderSongs();
+  </script>
+</body>
+</html>
