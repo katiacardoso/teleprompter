@@ -15,13 +15,18 @@
     
     /* Botões e Formulários */
     .btn { background-color: #bb86fc; color: #000; border: none; padding: 12px 20px; font-weight: bold; border-radius: 8px; cursor: pointer; font-size: 1rem; }
-    .btn-secondary { background-color: #333; color: #fff; }
+    .btn-secondary { background-color: #333; color: #fff; border: 1px solid #444; }
+    .btn-secondary:active { background-color: #444; }
     .btn-danger { background-color: #cf6679; color: #000; }
     .btn-success { background-color: #03dac6; color: #000; }
     .btn-icon { background: none; border: none; color: #fff; font-size: 1.5rem; cursor: pointer; }
     
     input, textarea { width: 100%; padding: 12px; background-color: #1e1e1e; border: 1px solid #333; border-radius: 8px; color: #fff; font-size: 1rem; margin-bottom: 16px; }
     textarea { height: 260px; resize: vertical; }
+
+    /* Barra de Ações Rápidas (Backup) */
+    .actions-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+    .actions-bar .btn { flex: 1; font-size: 0.85rem; padding: 10px 8px; display: flex; align-items: center; justify-content: center; gap: 6px; }
 
     /* Lista de Músicas */
     .song-card { background-color: #1e1e1e; border: 1px solid #2d2d2d; padding: 16px; border-radius: 12px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
@@ -33,6 +38,7 @@
     /* Teleprompter */
     #prompter-wrapper { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; display: flex; flex-direction: column; z-index: 100; }
     #prompter-header { background-color: rgba(30, 30, 30, 0.95); padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; }
+    /* Cor da letra atualizada para BRANCO (#ffffff) */
     #prompter-content { flex: 1; overflow-y: auto; padding: 40px 24px; color: #ffffff; font-weight: bold; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
     
     .controls-panel { background-color: #1e1e1e; padding: 16px; border-top: 1px solid #333; display: flex; flex-direction: column; gap: 12px; }
@@ -47,9 +53,17 @@
   <!-- TELA 1: LISTA DE MÚSICAS -->
   <div id="view-list" class="container">
     <header style="margin: -16px -16px 16px -16px;">
-      <span>Zayn - Konnakol Tour</span>
+      <span>Músicas (Ordem de Inserção)</span>
       <button class="btn" onclick="showView('view-add')">+ Nova</button>
     </header>
+
+    <!-- Botões de Backup e Transferência -->
+    <div class="actions-bar">
+      <button class="btn btn-secondary" onclick="exportBackup()">📥 Exportar Backup</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('input-import').click()">📤 Importar Backup</button>
+      <input type="file" id="input-import" accept=".json" class="hidden" onchange="importBackup(event)">
+    </div>
+
     <div id="songs-container"></div>
   </div>
 
@@ -101,7 +115,7 @@
   </div>
 
   <script>
-    // Gerenciamento de Músicas no Armazenamento do Dispositivo (localStorage)
+    // Gerenciamento de Músicas no Armazenamento Local
     function getSongs() {
       const data = localStorage.getItem('teleprompter_songs');
       return data ? JSON.parse(data) : [];
@@ -127,7 +141,7 @@
       container.innerHTML = '';
 
       if (songs.length === 0) {
-        container.innerHTML = `<p style="text-align:center; color:#777; margin-top:40px;">Nenhuma música cadastrada.<br>Clique em "+ Nova" para adicionar.</p>`;
+        container.innerHTML = `<p style="text-align:center; color:#777; margin-top:40px;">Nenhuma música cadastrada.<br>Clique em "+ Nova" para adicionar ou "Importar Backup".</p>`;
         return;
       }
 
@@ -155,7 +169,7 @@
       if (!title || !lyrics) return;
 
       const songs = getSongs();
-      songs.push({ id: Date.now(), title, lyrics }); // Adiciona sempre ao final (Ordem de inserção)
+      songs.push({ id: Date.now(), title, lyrics });
       saveSongs(songs);
 
       document.getElementById('form-add').reset();
@@ -169,6 +183,59 @@
         saveSongs(songs);
         renderSongs();
       }
+    }
+
+    // --- FUNCIONALIDADES DE BACKUP E TRANSFERÊNCIA ---
+    function exportBackup() {
+      const songs = getSongs();
+      if (songs.length === 0) {
+        alert("Sua lista de músicas está vazia. Cadastre algo antes de exportar!");
+        return;
+      }
+
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(songs, null, 2));
+      const downloadAnchor = document.createElement('a');
+      const dataHora = new Date().toISOString().slice(0, 10);
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `teleprompter_backup_${dataHora}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    function importBackup(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const importedSongs = JSON.parse(e.target.result);
+          if (!Array.isArray(importedSongs)) {
+            alert("O arquivo selecionado é inválido.");
+            return;
+          }
+
+          const currentSongs = getSongs();
+          if (confirm(`Deseja importar ${importedSongs.length} música(s)? Elas serão adicionadas ao final da sua lista mantendo a ordem.`)) {
+            const now = Date.now();
+            const formatted = importedSongs.map((s, idx) => ({
+              id: now + idx,
+              title: s.title || "Sem título",
+              lyrics: s.lyrics || ""
+            }));
+
+            const updatedList = [...currentSongs, ...formatted];
+            saveSongs(updatedList);
+            renderSongs();
+            alert("Músicas importadas com sucesso!");
+          }
+        } catch (err) {
+          alert("Erro ao ler o arquivo de backup. Verifique se escolheu o arquivo correto.");
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = ''; // Limpa o seletor para permitir reutilização
     }
 
     // Lógica da Rolagem Automática do Teleprompter
