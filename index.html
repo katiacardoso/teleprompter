@@ -61,7 +61,7 @@
     <div class="actions-bar">
       <button class="btn btn-secondary" onclick="exportBackup()">📥 Exportar Backup</button>
       <button class="btn btn-secondary" onclick="document.getElementById('input-import').click()">📤 Importar Backup</button>
-      <input type="file" id="input-import" accept=".json" class="hidden" onchange="importBackup(event)">
+      <input type="file" id="input-import" accept="*/*" class="hidden" onchange="importBackup(event)">
     </div>
 
     <div id="songs-container"></div>
